@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Block Fit</title> <!-- 게임 이름을 Block Fit으로 변경 -->
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        #game-board { display: grid; grid-template-columns: repeat(10, 30px); gap: 2px; margin: 20px auto; }
+        .cell { width: 30px; height: 30px; background-color: #ddd; }
+        .block-cell { width: 30px; height: 30px; background-color: #ddd; }
+        #next-blocks { margin-top: 20px; display: grid; gap: 5px; grid-template-columns: repeat(4, 30px); justify-content: center; }
+        #game-over { display: none; font-size: 24px; color: red; }
+        #score-board { font-size: 20px; margin: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Block Fit</h1> <!-- 게임 제목을 Block Fit으로 변경 -->
+    <div id="score-board">Score: 0</div>
+    <div id="highest-score">Highest Score: 0</div> <!-- 최고 점수 표시 -->
+    <div id="game-board"></div>
+    <button onclick="resetGame()">Reset Game</button>
+    <h2>Next Block</h2>
+    <div id="next-blocks"></div>
+    <div id="game-over">Game Over</div>
+
+    <script>
+        const boardSize = 10;
+        const board = Array.from({ length: boardSize }, () => Array(boardSize).fill(0));
+        const gameBoard = document.getElementById("game-board");
+        const nextBlocksContainer = document.getElementById("next-blocks");
+        const gameOverText = document.getElementById("game-over");
+        const scoreBoard = document.getElementById("score-board");
+        const highestScoreDisplay = document.getElementById("highest-score");
+
+        const colors = ["#4CAF50", "#FF5722", "#2196F3", "#FFC107", "#9C27B0", "#00BCD4", "#E91E63", "#8BC34A"];
+        const blocks = [
+            [[1]], [[1, 1]], [[1], [1]], [[1, 1, 1, 1]], [[1], [1], [1], [1]],
+            [[1, 1, 1]], [[1], [1], [1]], [[1, 1], [1, 1]], [[1, 1, 1], [0, 1, 0]],
+            [[1, 1, 0], [0, 1, 1]], [[0, 1, 1], [1, 1, 0]], [[1, 0], [1, 1], [1, 0]]
+        ];
+        let lastBlocks = [];
+        let score = 0;
+        let highestScore = localStorage.getItem("highestScore") || 0; // 로컬 저장소에서 최고 점수 가져오기
+
+        function updateScore(points) {
+            score += points;
+            scoreBoard.innerText = `Score: ${score}`;
+            updateHighestScore();
+        }
+
+        function updateHighestScore() {
+            if (score > highestScore) {
+                highestScore = score;
+                localStorage.setItem("highestScore", highestScore); // 로컬 저장소에 저장
+            }
+            highestScoreDisplay.innerText = `Highest Score: ${highestScore}`;
+        }
+
+        function getRandomBlock() {
+            let randomIndex;
+            do {
+                randomIndex = Math.floor(Math.random() * blocks.length);
+            } while (lastBlocks.filter(type => type === randomIndex).length >= 3);
+
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            lastBlocks.push(randomIndex);
+            if (lastBlocks.length > 3) lastBlocks.shift();
+            return { block: blocks[randomIndex], color: color };
+        }
+
+        function renderBoard() {
+            for (let row = 0; row < boardSize; row++) {
+                for (let col = 0; col < boardSize; col++) {
+                    const cell = gameBoard.children[row * boardSize + col];
+                    cell.style.backgroundColor = board[row][col] || "#ddd";
+                }
+            }
+        }
+
+        function canPlaceBlock(block, row, col) {
+            for (let r = 0; r < block.length; r++) {
+                for (let c = 0; c < block[r].length; c++) {
+                    if (block[r][c] && (row + r >= boardSize || col + c >= boardSize || board[row + r][col + c])) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function placeBlock(row, col) {
+            const { block, color } = currentBlock;
+            if (canPlaceBlock(block, row, col)) {
+                let blockSize = 0;
+                for (let r = 0; r < block.length; r++) {
+                    for (let c = 0; c < block[r].length; c++) {
+                        if (block[r][c]) {
+                            board[row + r][col + c] = color;
+                            blockSize++;
+                        }
+                    }
+                }
+                updateScore(blockSize);
+                checkAndClearLines();
+                renderBoard();
+                getNextBlock();
+            }
+        }
+
+        function checkAndClearLines() {
+            let linesCleared = 0;
+            for (let row = 0; row < boardSize; row++) {
+                if (board[row].every(cell => cell)) {
+                    board[row].fill(0);
+                    linesCleared++;
+                }
+            }
+            for (let col = 0; col < boardSize; col++) {
+                if (board.every(row => row[col])) {
+                    for (let row = 0; row < boardSize; row++) board[row][col] = 0;
+                    linesCleared++;
+                }
+            }
+            updateScore(linesCleared * 20);
+        }
+
+        function hasSpaceForBlock(block) {
+            for (let row = 0; row < boardSize; row++) {
+                for (let col = 0; col < boardSize; col++) {
+                    if (canPlaceBlock(block, row, col)) return true;
+                }
+            }
+            return false;
+        }
+
+        function checkGameOver() {
+            if (!hasSpaceForBlock(currentBlock.block)) {
+                gameOverText.style.display = "block";
+                setTimeout(resetGame, 3000);
+                return true;
+            }
+            return false;
+        }
+
+        let currentBlock = getRandomBlock();
+        function getNextBlock() {
+            currentBlock = getRandomBlock();
+            renderNextBlock();
+            if (checkGameOver()) return;
+        }
+
+        function renderNextBlock() {
+            nextBlocksContainer.innerHTML = "";
+            const { block, color } = currentBlock;
+            nextBlocksContainer.style.gridTemplateColumns = `repeat(${block[0].length}, 30px)`;
+            block.forEach(row => {
+                row.forEach(cell => {
+                    const blockCell = document.createElement("div");
+                    blockCell.classList.add("block-cell");
+                    blockCell.style.backgroundColor = cell ? color : "transparent";
+                    nextBlocksContainer.appendChild(blockCell);
+                });
+            });
+        }
+
+        function resetGame() {
+            board.forEach(row => row.fill(0));
+            lastBlocks = [];
+            score = 0;
+            updateScore(0);
+            gameOverText.style.display = "none";
+            createBoard();
+            getNextBlock();
+        }
+
+        function createBoard() {
+            gameBoard.innerHTML = "";
+            for (let row = 0; row < boardSize; row++) {
+                for (let col = 0; col < boardSize; col++) {
+                    const cell = document.createElement("div");
+                    cell.classList.add("cell");
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    cell.onclick = () => placeBlock(row, col);
+                    gameBoard.appendChild(cell);
+                }
+            }
+            renderBoard();
+        }
+
+        createBoard();
+        updateHighestScore(); // 처음 로드 시 최고 점수 표시
+        getNextBlock();
+    </script>
+</body>
+</html>
